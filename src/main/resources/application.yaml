@@ -1,0 +1,27 @@
+spring:
+  application:
+    name: greeting-streams
+  profiles:
+    active:
+      - local
+
+
+  config:
+    activate:
+      on-profile: local
+  kafka:
+
+    bootstrap-servers: localhost:9092
+    streams:
+      application-id: greeting-streams
+      properties:
+
+        # On définit le Serde par défaut pour les valeurs
+        default.value.serde: org.springframework.kafka.support.serializer.JsonSerde
+        spring.json.trusted.packages: "*"
+        # TRÈS IMPORTANT : On indique la classe cible
+        spring.json.value.default.type: com.greeting_streams.domain.Greeting
+        spring.json.use.type.headers: false
+       # default.deserialization.exception.handler: com.greeting_streams.exception.StreamDeserializationExceptionHandler
+
+server.port: 8080

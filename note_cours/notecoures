@@ -1,0 +1,58 @@
+
+Defintion Topology:
+ In Kafka Stream topology means its a data pipeline or template on how the data is going to be flow or handled
+
+ How kafka Stream executes the topology:
+    Two things happend when we  start our Kafka Stream:
+    1- creating the task for the topology.
+    2- executing the task using stream threads.
+
+ How the  tasks are created for the topology?
+ task is basically the unit of work in a kafka streams application
+
+ how many tasks can a kafka stream application can have?
+
+ the maximum number of tasks is determined by the number of partitions of source topics
+ example:
+    if source topics have 4 partitions, then we will have four tasks created behind the scenes for our application.
+    An the benefit for that creating  is parallel by our kafka streams application.
+    as we see, when  Kafka stream splits the data into partitions inside the topic and each and every partition is independent of one another.
+    and when you have 4 tasks created in this examples, you can parallelly process them to speed up the overall streaming process.
+
+    The parallelism is determined by threads  but the  stream threads are the one which are reponsible for executing the tasks by default.
+
+    By default the number of streams threads is 1, and this value is controlled by the:
+     num.stream.threads property. and you can modify this value if
+    you want
+
+    How tasks is created and how it works?
+     Let's say we have a Kafka topic with four partition and our Kafka streams application is going to stream from this topic.
+     Since we have four partitions, there is going to be four tasks created for us behind the scenes.
+     and as we have only one thread by default(num.stream.threads =1) all this 4 tasks  handled by this single thread.
+     in this case we don't have parallelism.
+      to Achevie parallelism, you must set (num.stream.threads =4) and the other approach is basically
+      you can have two instances or more instances of the KA stream application and these applications can be in the same node or a differents node
+      with the same applicationId .
+      As long  as you have the same application ID, you can acheive parallelism
+
+ what is the ideal number of stream threads that you can set for your application?
+ So the general recommendation is to keep the stream threads equal to the number of cores in the machine
+
+
+ how do stream threads utilize tasks and partitions to achieve parallelism in processing data?
+
+ Thread can manage/exectue one or more tasks (who is responsible for processing data one or more partition in topics)
+
+
+kafka Stream and Consumer Groups:
+Kafka streams behind the scenes uses consumer API to stream the data from the Kafka topic.
+ Kafka streams uses the consumer and producer API  behind the scenes to consume and produce data into the KAFA topic
+
+
+ What's one common pitfall or misconfiguration related to task distribution
+  that could lead to performance bottlenecks, even with multiple instances and threads?
+ The key is to ensure a good repartitioning or keying strategy for your data so that it's spread out across all available partitions
+
+
+
+

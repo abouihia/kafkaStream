@@ -1,0 +1,160 @@
+Windowing:
+ refers to grouping events by the time (windows / buckets) that share the same key.
+ Some of the examples are :
+     -calculating the total number orders placed every minute or hour or day or any other custom time interval.
+     -calculating the total revenue generated every minute or hour or day
+  We can also perform windowing at the second rates too.
+
+
+In order to group event by the time we need to extract the time from the Kafka record that's present on the Kafka topic.
+1-Even time.
+    The time the record gets produced into the Kafka topic.
+    This time is set by the Kafka producer itself. This is a time which is the actual event generation time.
+2-Ingestion Time:
+  The time the record get appended to kafka topics
+
+3-Processing Time:
+ The time the record gets read and  processed by stream app
+
+ TimeStamp Extractor in KafkaStream:
+
+def:
+Timestamp Extractor = "Clock picker"
+- Kafka Streams needs a timestamp from each record
+- "Where do I get the time from this message?"
+- Extractor answers: "Here it is!" → picks the timestamp
+
+Why does it matter?
+Windows need timestamps:
+- Tumbling: "Does this go in 10:00-10:05 window?"
+- Hopping: "Which overlapping window?"
+- Without timestamp → NO windows work!
+
+type of time:
+-------------------------------------------------------------------------------------
+| Type            | Where timestamp comes from    | When to use                      |
+| --------------- | ----------------------------- | ---------------------------------|
+| Event Time      | Inside your data (JSON field) | ✅ MOST COMMONReal business time |
+| Ingestion Time  | Kafka topic (default)         | ✅ Simple, reliable              |
+| Processing Time | Right now (app clock)         | ❌ Rare - dashboards only        |
+
+
+   1-FailOnInvalidTimeStamp(default timestamp extractor)   --> extract a timestamp from the consumer record that's read from
+                                    the kafka topic which throw a StreamExceptuon if the timestamp is invalid.
+
+  2-LogAndSkipOnInvalidTimeStamp. --> Parses the record timestamp, similar to FailOnInvalidTimeStamp
+                                      the differente is the don't throw exception, juste log
+
+  3-WallClockTimeStampExtractor. ---> it ignore the timestamp  from the consumer record
+
+  Window Type for Kafka Stream:
+
+  A-Tumbling Window  ou fenetre gilssante(une fenêtre temporelle de taille fixe et non chevauchante utilisée pour regrouper et agréger des événements)
+  - [Fixed-size, non-overlapping] time buckets
+  - Windows align to app's [wall-clock time] (machine clock)
+  - Groups records by [same key + same window]
+
+    The time Windows/Bucket are created from the clock of the app's running machine like this:
+      Duration  duration = Duration.ofSeconds(5)
+      TimeWindow  tumblingWindow = TimeWindow.ofSizeWithNoGrace(duration)
+      // to group record by window
+
+      wordsStream.groupByKey()
+                 .windowedBy(tumblingWindow)
+                .count()
+
+
+Kafka Streams windows operate in UTC, and any mismatch will lead to incorrect time buckets, skewed aggregates, and ultimately,
+unreliable business metrics. This is a common pitfall, and recognizing it is a sign of a strong understanding.
+
+
+
+  B-Hopping Window
+    is a fixed time window, with overlapping
+     Duration  windowSize = Duration.ofSeconds(5)
+      Duration  advanceBySize = Duration.ofSeconds(3)
+          TimeWindow  tumblingWindow = TimeWindow.ofSizeWithNoGrace(duration).advanceBy(advanceBySize)
+
+         Examples when use:
+         - Rolling 30min avg CPU usage (10min hops) ✓
+         - Fraud detection (overlapping 15min windows) ✓
+         - Social media engagement trends ✓
+
+  C-Sliding Window
+   it's a timestamp in the event that create the window.
+
+   Key caracteristics:
+   ✅ **Event-triggered**: Windows created by record arrival/departure
+   ✅ **Fixed span**: timeDifference = exact window duration
+   ✅ **Continuous**: Always exactly 1 active window per key
+   ✅ **No alignment**: Not epoch-aligned (unlike hopping/tumbling)
+   ✅ **Emit on change**: New result each time window membership changes
+
+    TUMBLING:    [0-5)[5-10)[10-15)  ← Fixed buckets, wall-clock
+    HOPPING:     [0-10)[5-15)[10-20) ← Fixed buckets, overlapping
+    SLIDING:     [1-6)[2-7)[4-9)...   ← Event-driven, continuous
+
+
+   and the window that are created overlap with another
+    code:
+    Duration timeDiff = Duration.ofSeconds(5);  // Max span: 5s between records
+    Duration grace = Duration.ofSeconds(1);     // Late record tolerance
+
+    SlidingWindows sliding = SlidingWindows
+        .withTimeDifferenceAndGrace(timeDiff, grace);
+        or
+      SlidingWindows sliding = SlidingWindows
+            .ofTimeDifferenceAndGrace(timeDiff);
+
+          if receive event at seconde 6 the widow (1, 6) as i have here sliding  with 5 secondes
+
+       Example of use:
+       ✅ **Real-time anomaly detection** (events within N seconds)
+       ✅ **Session-like analysis** (activity bursts)
+       ✅ **Purchase funnels** (add-to-cart → purchase within 1hr)
+       ✅ **Link monitoring** (link down events within 5min)
+       ✅ **Continuous monitoring** (always exactly 1 active window)
+
+Think of it this way: for every single event that comes in, a sliding window creates a window that spans a defined duration around that event's timestamp.
+This means that a single event can be part of multiple sliding windows, and each window is essentially centered or anchored by an event.
+
+  D-Session Window
+  E-Sliding Join Window
+  F-Sliding Aggregation Window.
+
+
+
+Suppressed :
+
+By default, aggregated window results are emitted based on commit.interval.ms (e.g., every 30s)
+
+L'opérateur de suppression(suppressed) dans Kafka Streams est un outil puissant permettant de contrôler
+le moment où les résultats d'agrégation par fenêtre sont émis en aval (downstream).
+ Il vous aide à éviter d'émettre des résultats intermédiaires
+ et à attendre plutôt des résultats plus complets ou finaux.
+
+ The Problem It Solves
+ Without suppress, windowed aggregations emit results every time a new record updates the window. This means:
+
+ You get many intermediate updates for the same window
+ Downstream systems receive incomplete data repeatedly
+ It creates unnecessary processing overhead
+ Results are emitted even while the window is still open and receiving data
+
+ To achieve that we need 3 differentes configuration:
+
+
+  1-Suppression Config
+     have 2 differentes config :
+       1-1 Suppressed.unitlWindowCloses  ==> only emit the result after the defined window is closed
+       1-2 Suppressed.unitlTimeLimit     ==> only emit the result if there are no successive events for the defined time.
+        Let's say if you pass the value as five seconds to it. In that case,
+        if there are no events received with that five second interval, then in that case, it will emit the results downstream.
+  2-Buffer Config
+     BufferConfig.MaxByte(): total number of bytes the buffer can hold
+     BufferConfig.MaxRecords():total number of records the buffer can hold
+     BufferConfig.unBounded():Represents unbounded memory to hold the records
+
+  3-Buffer full Config
+     shutDownWhenFUll : shutdown the app if the buffer is full
+     emitEarlyWhenFull : emit the intermediate results if the buffer is full
