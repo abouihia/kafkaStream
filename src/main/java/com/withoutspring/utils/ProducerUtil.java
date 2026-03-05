@@ -1,10 +1,9 @@
 package com.withoutspring.utils;
 
+import io.confluent.developer.avro.ElectronicOrder;
+import io.confluent.kafka.serializers.KafkaAvroSerializer;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.kafka.clients.producer.KafkaProducer;
-import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.clients.producer.*;
 import org.apache.kafka.common.serialization.StringSerializer;
 
 import java.util.HashMap;
@@ -19,6 +18,7 @@ public class ProducerUtil {
 
 
     static KafkaProducer<String, String> producer = new KafkaProducer<String, String >(producerProps());
+    static Producer<String, ElectronicOrder> producerElectronics = new KafkaProducer<>(producerPropsElectro());
 
     private static Map<String, Object> producerProps() {
 
@@ -29,6 +29,39 @@ public class ProducerUtil {
         propsMap.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
 
         return  propsMap;
+    }
+    private static Map<String, Object> producerPropsElectro() {
+
+        Map<String, Object> propsMap = new HashMap<>();
+
+        propsMap.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+        propsMap.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        propsMap.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, KafkaAvroSerializer.class);
+        propsMap.put(  "schema.registry.url", "http://localhost:8081");
+
+        return  propsMap;
+    }
+
+    public static RecordMetadata publishMessageSyncBis (ElectronicOrder  electronicOrder,  String topicName){
+
+        ProducerRecord<String, ElectronicOrder> producerRecord = new ProducerRecord<>(topicName,
+                0,
+                electronicOrder.getTime(),
+                electronicOrder.getElectronicId().toString(),
+                electronicOrder);
+
+        RecordMetadata recordMetadata  = null;
+        try {
+            System.out.printf("producerRecord : " + producerRecord);
+            recordMetadata = producerElectronics.send(producerRecord).get();
+        } catch (InterruptedException e) {
+            System.out.printf("InterruptedException in  publishMessageSync : {}  ", e.getMessage(), e);
+        } catch (ExecutionException e) {
+            System.out.printf("ExecutionException in  publishMessageSync : {}  ", e.getMessage(), e);
+        }catch(Exception e){
+            System.out.printf("Exception in  publishMessageSync : {}  ", e.getMessage(), e);
+        }
+        return recordMetadata;
     }
 
    public static RecordMetadata publishMessageSync(String  topicName, String key, String message){
